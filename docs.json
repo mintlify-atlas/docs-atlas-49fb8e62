@@ -53,7 +53,7 @@
         "tab": "API Reference",
         "groups": [
           {
-            "group": "Endpoints",
+            "group": "API",
             "pages": [
               "api/user-endpoints",
               "api/product-endpoints"

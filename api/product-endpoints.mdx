@@ -1,65 +1,198 @@
 ---
-title: 'Product Endpoints'
-description: 'Product catalog and search endpoints for the E-Commerce Backend API'
+title: 'Product Use Cases'
+description: 'Product catalog use cases and service layer for the E-Commerce Backend API'
 ---
 
 ## Overview
 
-The Product API provides endpoints for querying and retrieving product information from the e-commerce catalog. These endpoints support both individual product lookups and bulk retrieval operations.
+The Product module provides application-level use cases for querying and retrieving product information from the e-commerce catalog. These use cases implement the business logic for product operations.
 
-<Note>
-  The product endpoints are designed for read operations. Product creation and updates would typically be handled through a separate administrative API.
-</Note>
+<Warning>
+  **REST Controller Not Implemented**: The product use cases are implemented but not yet exposed through REST endpoints. To use these features, you'll need to create a `ProductoRestController` in the infrastructure layer.
+</Warning>
 
 ---
 
-## Get Product by Name
+## Available Use Cases
 
-<Expandable title="GET /productos/nombre/{nombre}">
-  Retrieves detailed information for a specific product by its name.
+### ConsultarProductoDetalladoUC
 
-  ### Path Parameters
+Retrieves detailed information for a specific product by its name.
 
-  <ParamField path="nombre" type="string" required>
-    The exact name of the product to retrieve. Product names are case-sensitive.
-  </ParamField>
+**Location**: `src/main/java/com/example/demo/producto/application/usecases/ConsultarProductoDetalladoUC.java`
 
-  ### Response
+**Method Signature**:
+```java ConsultarProductoDetalladoUC.java
+@Service
+public class ConsultarProductoDetalladoUC {
+    private final ProductoRepository productoRepository;
+    
+    public ConsultarProductoDetalladoUC(ProductoRepository productoRepository) {
+        this.productoRepository = productoRepository;
+    }
+    
+    public ProductoPOJO execute(String nombre) {
+        return productoRepository.getProductByNombre(nombre);
+    }
+}
+```
 
-  Returns a single product object with complete details.
+**Parameters**:
+- `nombre` (String): The exact name of the product to retrieve. Product names are case-sensitive.
 
-  <ResponseField name="id" type="long">
-    Unique identifier for the product
-  </ResponseField>
+**Returns**: 
+- `ProductoPOJO` object with product details (id, nombre, precio)
 
-  <ResponseField name="nombre" type="string">
-    The product name
-  </ResponseField>
+**Example Usage**:
+```java
+@Autowired
+private ConsultarProductoDetalladoUC consultarProductoDetalladoUC;
 
-  <ResponseField name="precio" type="object">
-    Price value object with validation
-    <Expandable title="PrecioVO properties">
-      <ResponseField name="value" type="float">
-        The product price as a floating-point number. Must be non-negative.
-      </ResponseField>
-    </Expandable>
-  </ResponseField>
+public void getProduct() {
+    ProductoPOJO producto = consultarProductoDetalladoUC.execute("Laptop Dell XPS 15");
+    System.out.println("Product ID: " + producto.getId());
+    System.out.println("Name: " + producto.getNombre());
+    System.out.println("Price: " + producto.getPrecio().getValue());
+}
+```
 
-  ### Example Request
+---
 
-  <CodeGroup>
+### RecuperarTodosLosProductosUC
+
+Retrieves the complete list of all products in the catalog.
+
+**Location**: `src/main/java/com/example/demo/producto/application/usecases/RecuperarTodosLosProductosUC.java`
+
+**Method Signature**:
+```java RecuperarTodosLosProductosUC.java
+@Service
+public class RecuperarTodosLosProductosUC {
+    private final ProductoRepository productoRepository;
+    
+    public RecuperarTodosLosProductosUC(ProductoRepository productoRepository) {
+        this.productoRepository = productoRepository;
+    }
+    
+    public List<ProductoPOJO> execute() {
+        return productoRepository.findAll();
+    }
+}
+```
+
+**Parameters**: None
+
+**Returns**: 
+- `List<ProductoPOJO>` containing all products in the catalog
+
+**Example Usage**:
+```java
+@Autowired
+private RecuperarTodosLosProductosUC recuperarTodosLosProductosUC;
+
+public void getAllProducts() {
+    List<ProductoPOJO> productos = recuperarTodosLosProductosUC.execute();
+    for (ProductoPOJO producto : productos) {
+        System.out.println(producto.getNombre() + ": $" + producto.getPrecio().getValue());
+    }
+}
+```
+
+---
+
+## Repository Interface
+
+The use cases depend on the `ProductoRepository` interface:
+
+**Location**: `src/main/java/com/example/demo/producto/domain/repositories/ProductoRepository.java`
+
+```java ProductoRepository.java
+public interface ProductoRepository {
+    List<ProductoPOJO> findAll();
+    ProductoPOJO getProductByNombre(String nombre);
+}
+```
+
+---
+
+## Data Models
+
+### ProductoPOJO
+
+The product domain model used across all product use cases.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | Long | Unique identifier |
+| `nombre` | String | Product name |
+| `precio` | PrecioVO | Price value object |
+
+See [Product Model](/api/models/product-model) for complete documentation.
+
+### PrecioVO
+
+Value object for price handling with built-in validation.
+
+**Validation Rules:**
+- Cannot be null
+- Must be non-negative (>= 0)
+- Stored as Float type for decimal precision
+
+See [Product Model](/api/models/product-model) for complete documentation.
+
+---
+
+## Implementation Guide
+
+### Creating a REST Controller
+
+To expose these use cases through REST endpoints, create a controller:
+
+```java ProductoRestController.java
+package com.example.demo.producto.infrastructure.controllers;
+
+import org.springframework.web.bind.annotation.*;
+import com.example.demo.producto.application.usecases.*;
+import com.example.demo.producto.domain.models.ProductoPOJO;
+import java.util.List;
+
+@RestController
+@RequestMapping("/productos")
+public class ProductoRestController {
+    
+    private final ConsultarProductoDetalladoUC consultarProductoDetalladoUC;
+    private final RecuperarTodosLosProductosUC recuperarTodosLosProductosUC;
+    
+    public ProductoRestController(
+            ConsultarProductoDetalladoUC consultarProductoDetalladoUC,
+            RecuperarTodosLosProductosUC recuperarTodosLosProductosUC) {
+        this.consultarProductoDetalladoUC = consultarProductoDetalladoUC;
+        this.recuperarTodosLosProductosUC = recuperarTodosLosProductosUC;
+    }
+    
+    @GetMapping("/nombre/{nombre}")
+    public ProductoPOJO getProductByName(@PathVariable String nombre) {
+        return consultarProductoDetalladoUC.execute(nombre);
+    }
+    
+    @GetMapping
+    public List<ProductoPOJO> getAllProducts() {
+        return recuperarTodosLosProductosUC.execute();
+    }
+}
+```
+
+### Suggested REST Endpoints
+
+Once the controller is implemented, the following endpoints would be available:
+
+<Accordion title="GET /productos/nombre/{nombre} - Get product by name">
   ```bash cURL
   curl -X GET http://localhost:8080/productos/nombre/Laptop%20Dell%20XPS%2015
   ```
-
-  ```bash cURL (Simple)
-  curl -X GET "http://localhost:8080/productos/nombre/Laptop Dell XPS 15"
-  ```
-  </CodeGroup>
-
-  ### Example Response
-
-  ```json 200 OK
+  
+  **Response**:
+  ```json
   {
     "id": 101,
     "nombre": "Laptop Dell XPS 15",
@@ -68,80 +201,15 @@ The Product API provides endpoints for querying and retrieving product informati
     }
   }
   ```
+</Accordion>
 
-  ### Error Responses
-
-  ```json 404 Not Found
-  {
-    "error": "ProductNotFoundException",
-    "message": "Producto no encontrado"
-  }
-  ```
-
-  ```json 400 Bad Request - Empty Name
-  {
-    "error": "BadRequestException",
-    "message": "El nombre del producto no puede estar vacío"
-  }
-  ```
-
-</Expandable>
-
----
-
-## Get All Products
-
-<Expandable title="GET /productos">
-  Retrieves the complete list of all products in the catalog.
-
-  ### Query Parameters
-
-  <Note>
-    This endpoint currently returns all products without pagination. For large catalogs, consider implementing pagination in future versions.
-  </Note>
-
-  ### Response
-
-  Returns an array of product objects.
-
-  <ResponseField name="products" type="array">
-    Array of product objects
-    <Expandable title="Product object properties">
-      <ResponseField name="id" type="long">
-        Unique identifier for the product
-      </ResponseField>
-
-      <ResponseField name="nombre" type="string">
-        The product name
-      </ResponseField>
-
-      <ResponseField name="precio" type="object">
-        Price value object
-        <Expandable title="PrecioVO properties">
-          <ResponseField name="value" type="float">
-            The product price. Always non-negative.
-          </ResponseField>
-        </Expandable>
-      </ResponseField>
-    </Expandable>
-  </ResponseField>
-
-  ### Example Request
-
-  <CodeGroup>
+<Accordion title="GET /productos - Get all products">
   ```bash cURL
   curl -X GET http://localhost:8080/productos
   ```
-
-  ```bash cURL (with headers)
-  curl -X GET http://localhost:8080/productos \
-    -H "Accept: application/json"
-  ```
-  </CodeGroup>
-
-  ### Example Response
-
-  ```json 200 OK
+  
+  **Response**:
+  ```json
   [
     {
       "id": 101,
@@ -156,148 +224,49 @@ The Product API provides endpoints for querying and retrieving product informati
       "precio": {
         "value": 99.99
       }
-    },
-    {
-      "id": 103,
-      "nombre": "Teclado Mecánico Keychron K2",
-      "precio": {
-        "value": 89.99
-      }
-    },
-    {
-      "id": 104,
-      "nombre": "Monitor LG UltraWide 34\"",
-      "precio": {
-        "value": 549.99
-      }
-    },
-    {
-      "id": 105,
-      "nombre": "Auriculares Sony WH-1000XM5",
-      "precio": {
-        "value": 399.99
-      }
     }
   ]
   ```
-
-  ### Error Responses
-
-  ```json 500 Internal Server Error
-  {
-    "error": "InternalServerError",
-    "message": "Error al recuperar productos"
-  }
-  ```
-
-</Expandable>
+</Accordion>
 
 ---
 
-## Data Models
+## Architecture
 
-### ProductoPOJO
+The Product module follows Clean Architecture and Domain-Driven Design principles:
 
-The product domain model used across all product endpoints.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | Long | Unique identifier |
-| `nombre` | String | Product name |
-| `precio` | PrecioVO | Price value object |
-
-### PrecioVO
-
-Value object for price handling with built-in validation.
-
-**Validation Rules:**
-- Cannot be null
-- Must be non-negative (>= 0)
-- Stored as Float type for decimal precision
-
-**Methods:**
-- `actualizarPrecio(Float nuevoValor)`: Creates a new PrecioVO with updated value
-- `toString()`: Returns string representation of the price
-- `equals(Object o)`: Value-based equality comparison
-- `hashCode()`: Hash code based on price value
-
-**Example:**
-```json
-{
-  "value": 299.99
-}
-```
+<CardGroup cols={3}>
+  <Card title="Application Layer" icon="gears">
+    Use cases implementing business logic
+    - `ConsultarProductoDetalladoUC`
+    - `RecuperarTodosLosProductosUC`
+  </Card>
+  
+  <Card title="Domain Layer" icon="cube">
+    Core business models and interfaces
+    - `ProductoPOJO`
+    - `PrecioVO`
+    - `ProductoRepository` (interface)
+  </Card>
+  
+  <Card title="Infrastructure Layer" icon="server">
+    Technical implementations
+    - `ProductoAdapterRepository`
+    - `ProductoEntity` (JPA)
+    - `ProductoJPARepository`
+    - REST Controller (to be implemented)
+  </Card>
+</CardGroup>
 
 ---
 
-## Implementation Details
+## Related Documentation
 
-### Architecture
-
-The Product API follows Clean Architecture and Domain-Driven Design principles:
-
-- **Application Layer**: Use Cases
-  - `ConsultarProductoDetalladoUC` (src/main/java/com/example/demo/producto/application/usecases/ConsultarProductoDetalladoUC.java:1) - Get product by name
-  - `RecuperarTodosLosProductosUC` (src/main/java/com/example/demo/producto/application/usecases/RecuperarTodosLosProductosUC.java:1) - Get all products
-- **Domain Layer**: 
-  - `ProductoPOJO` (src/main/java/com/example/demo/producto/domain/models/ProductoPOJO.java:1) - Product domain model
-  - `PrecioVO` (src/main/java/com/example/demo/producto/domain/vo/PrecioVO.java:1) - Price value object
-  - `ProductoRepository` - Repository interface
-- **Infrastructure Layer**: 
-  - `ProductoAdapterRepository` - Repository implementation
-  - `ProductoEntity` - JPA entity
-  - REST Controller (to be implemented)
-
-### Use Case Processing Flow
-
-1. **Get Product by Name** (`ConsultarProductoDetalladoUC`):
-   ```java
-   public ProductoPOJO execute(String nombre)
-   ```
-   - Accepts product name as parameter
-   - Calls `productoRepository.getProductByNombre(nombre)`
-   - Returns single `ProductoPOJO` or throws exception if not found
-
-2. **Get All Products** (`RecuperarTodosLosProductosUC`):
-   ```java
-   public List<ProductoPOJO> execute()
-   ```
-   - No parameters required
-   - Calls `productoRepository.findAll()`
-   - Returns `List<ProductoPOJO>` with all products
-
-### Price Validation
-
-The `PrecioVO` value object enforces business rules:
-
-```java
-public PrecioVO(Float value) {
-    if (value == null) {
-        throw new IllegalArgumentException("El precio no puede ser nulo");
-    }
-    if (value < 0) {
-        throw new IllegalArgumentException("El precio no puede ser negativo");
-    }
-    this.value = value;
-}
-```
-
-This ensures that:
-- All products have valid prices
-- Prices cannot be negative
-- Null prices are rejected at creation time
-
----
-
-## Future Enhancements
-
-<Note>
-  The following features are recommended for production deployments:
-</Note>
-
-- **Pagination**: Add pagination support to `GET /productos` for large catalogs
-- **Filtering**: Add query parameters for filtering by price range, category, etc.
-- **Search**: Implement full-text search across product names and descriptions
-- **Sorting**: Add sorting options (by price, name, date added)
-- **Product Details**: Extend ProductoPOJO to include descriptions, images, inventory status
-- **REST Controller**: Implement `ProductoRestController` to expose these use cases as REST endpoints
+<CardGroup cols={2}>
+  <Card title="Product Model" icon="box" href="/api/models/product-model">
+    Complete ProductoPOJO and PrecioVO documentation
+  </Card>
+  <Card title="Clean Architecture" icon="layer-group" href="/concepts/clean-architecture">
+    Understanding the architecture pattern
+  </Card>
+</CardGroup>
