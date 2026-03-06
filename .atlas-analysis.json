@@ -1,0 +1,82 @@
+{
+  "projectType": "api-service",
+  "projectName": "E-Commerce Backend API",
+  "projectDescription": "A Spring Boot REST API for e-commerce with clean architecture, CQRS pattern, and user/product management.",
+  "theme": "aspen",
+  "primaryColor": "#2563eb",
+  "lightColor": "#3b82f6",
+  "darkColor": "#1e40af",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/database-setup",
+              "guides/authentication",
+              "guides/error-handling"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/clean-architecture",
+              "concepts/cqrs-pattern",
+              "concepts/value-objects"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api/user-endpoints",
+              "api/product-endpoints"
+            ]
+          },
+          {
+            "group": "Models",
+            "pages": [
+              "api/models/user-model",
+              "api/models/product-model"
+            ]
+          },
+          {
+            "group": "Error Handling",
+            "pages": [
+              "api/exceptions"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Clean/Hexagonal Architecture with DDD",
+    "CQRS Pattern (Commands and Queries)",
+    "User Registration and Login",
+    "Product Management API",
+    "Value Objects for Domain Validation",
+    "Global Exception Handling",
+    "MySQL Database with JPA/Hibernate"
+  ],
+  "publicApiSurface": [
+    "POST /registro - Register new user",
+    "GET /login/{usuario}/{contrasena} - User login",
+    "ConsultarProductoDetalladoUC.execute(String nombre) - Get product by name",
+    "RecuperarTodosLosProductosUC.execute() - Get all products"
+  ]
+}
