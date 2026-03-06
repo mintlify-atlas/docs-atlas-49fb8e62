@@ -1,0 +1,259 @@
+---
+title: 'User Endpoints'
+description: 'Authentication and user management endpoints for the E-Commerce Backend API'
+---
+
+## Overview
+
+The User API provides endpoints for user registration and authentication. All endpoints return user objects with secure password handling.
+
+<Note>
+  Passwords must meet the following requirements:
+  - Minimum 8 characters
+  - Maximum 64 characters
+  - Must contain at least one letter and one number
+</Note>
+
+---
+
+## Register User
+
+<Expandable title="POST /registro">
+  Creates a new user account in the system.
+
+  ### Request Body
+
+  <ParamField body="usuario" type="string" required>
+    The username for the new account. Must be unique.
+  </ParamField>
+
+  <ParamField body="contrasena" type="string" required>
+    The password for the account. Must meet password requirements:
+    - 8-64 characters
+    - At least one letter and one number
+  </ParamField>
+
+  ### Response
+
+  Returns the created user object.
+
+  <ResponseField name="id" type="long">
+    Unique identifier for the user
+  </ResponseField>
+
+  <ResponseField name="usuario" type="string">
+    The username
+  </ResponseField>
+
+  <ResponseField name="contrasena" type="object">
+    Password value object (sanitized in responses)
+    <Expandable title="ContrasenaVO properties">
+      <ResponseField name="value" type="string">
+        The encrypted password value (masked as "****" in responses)
+      </ResponseField>
+    </Expandable>
+  </ResponseField>
+
+  ### Example Request
+
+  <CodeGroup>
+  ```bash cURL
+  curl -X POST http://localhost:8080/registro \
+    -H "Content-Type: application/json" \
+    -d '{
+      "usuario": "john_doe",
+      "contrasena": "SecurePass123"
+    }'
+  ```
+
+  ```json Request Body
+  {
+    "usuario": "john_doe",
+    "contrasena": "SecurePass123"
+  }
+  ```
+  </CodeGroup>
+
+  ### Example Response
+
+  ```json 200 OK
+  {
+    "id": 1,
+    "usuario": "john_doe",
+    "contrasena": {
+      "value": "****"
+    }
+  }
+  ```
+
+  ### Error Responses
+
+  ```json 400 Bad Request - Invalid Password
+  {
+    "error": "InvalidPasswordException",
+    "message": "La contraseña debe tener al menos 8 caracteres"
+  }
+  ```
+
+  ```json 400 Bad Request - Password Too Short
+  {
+    "error": "InvalidPasswordException",
+    "message": "La contraseña debe contener al menos una letra y un número"
+  }
+  ```
+
+  ```json 400 Bad Request - Empty Password
+  {
+    "error": "InvalidPasswordException",
+    "message": "La contraseña no puede estar vacía"
+  }
+
+  ```json 400 Bad Request - Password Too Long
+  {
+    "error": "InvalidPasswordException",
+    "message": "La contraseña no puede superar los 64 caracteres"
+  }
+  ```
+
+</Expandable>
+
+---
+
+## User Login
+
+<Expandable title="GET /login/{usuario}/{contrasena}">
+  Authenticates a user with their username and password.
+
+  <Note>
+    This endpoint uses path parameters for authentication. In production environments, consider using POST with request body or proper authentication headers for enhanced security.
+  </Note>
+
+  ### Path Parameters
+
+  <ParamField path="usuario" type="string" required>
+    The username to authenticate
+  </ParamField>
+
+  <ParamField path="contrasena" type="string" required>
+    The user's password
+  </ParamField>
+
+  ### Response
+
+  Returns the authenticated user object if credentials are valid.
+
+  <ResponseField name="id" type="long">
+    Unique identifier for the user
+  </ResponseField>
+
+  <ResponseField name="usuario" type="string">
+    The username
+  </ResponseField>
+
+  <ResponseField name="contrasena" type="object">
+    Password value object (sanitized in responses)
+    <Expandable title="ContrasenaVO properties">
+      <ResponseField name="value" type="string">
+        The encrypted password value (masked as "****" in responses)
+      </ResponseField>
+    </Expandable>
+  </ResponseField>
+
+  ### Example Request
+
+  <CodeGroup>
+  ```bash cURL
+  curl -X GET http://localhost:8080/login/john_doe/SecurePass123
+  ```
+
+  ```bash cURL (URL Encoded)
+  curl -X GET "http://localhost:8080/login/john_doe/SecurePass123"
+  ```
+  </CodeGroup>
+
+  ### Example Response
+
+  ```json 200 OK
+  {
+    "id": 1,
+    "usuario": "john_doe",
+    "contrasena": {
+      "value": "****"
+    }
+  }
+  ```
+
+  ### Error Responses
+
+  ```json 404 Not Found
+  {
+    "error": "UserNotFoundException",
+    "message": "Usuario no encontrado"
+  }
+  ```
+
+  ```json 401 Unauthorized
+  {
+    "error": "InvalidCredentialsException",
+    "message": "Credenciales inválidas"
+  }
+  ```
+
+</Expandable>
+
+---
+
+## Data Models
+
+### UsuarioPOJO
+
+The user domain model used across all user endpoints.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | Long | Unique identifier |
+| `usuario` | String | Username |
+| `contrasena` | ContrasenaVO | Password value object |
+
+### ContrasenaVO
+
+Value object for password handling with built-in validation.
+
+**Validation Rules:**
+- Cannot be null or empty
+- Minimum length: 8 characters
+- Maximum length: 64 characters
+- Must contain at least one letter (A-Z, a-z)
+- Must contain at least one digit (0-9)
+
+**Security:**
+- The `toString()` method returns `"****"` to prevent password leakage in logs
+- Passwords are never returned in plain text in API responses
+
+---
+
+## Implementation Details
+
+### Architecture
+
+The User API follows Clean Architecture principles:
+
+- **Controller Layer**: `UsuarioRestController` (src/main/java/com/example/demo/usuario/infrastructure/controllers/UsuarioRestController.java:1)
+- **Application Layer**: Command and Query handlers
+  - `RegistrarUsuarioHandler` for registration
+  - `LoginUsuarioHandler` for authentication
+- **Domain Layer**: `UsuarioPOJO` and `ContrasenaVO` value objects
+
+### Request Processing Flow
+
+1. **Registration** (`POST /registro`):
+   - Receives `RegistrarUsuarioRequest` with username and password
+   - Creates `RegistrarUsuarioCommand` with validated `ContrasenaVO`
+   - Handler processes command and persists user
+   - Returns created `UsuarioPOJO`
+
+2. **Login** (`GET /login/{usuario}/{contrasena}`):
+   - Extracts credentials from path parameters
+   - Creates `LoginUsuarioQuery`
+   - Handler validates credentials and retrieves user
+   - Returns authenticated `UsuarioPOJO`

@@ -1,0 +1,396 @@
+---
+title: 'Value Objects'
+description: 'Immutable domain primitives that encapsulate validation rules and business logic'
+---
+
+## Overview
+
+**Value Objects (VOs)** are immutable objects that represent domain concepts through their attributes rather than identity. Unlike entities (which have IDs), value objects are defined by their values and enforce business rules at construction time.
+
+<Info>
+Two value objects with the same values are considered equal, regardless of their memory address.
+</Info>
+
+## Characteristics
+
+<CardGroup cols={2}>
+  <Card title="Immutable" icon="lock">
+    Once created, their state cannot change
+  </Card>
+  <Card title="Self-Validating" icon="shield-check">
+    Validation happens in the constructor
+  </Card>
+  <Card title="Side-Effect Free" icon="leaf">
+    Methods return new instances instead of modifying state
+  </Card>
+  <Card title="Value Equality" icon="equals">
+    Compared by value, not reference
+  </Card>
+</CardGroup>
+
+## ContrasenaVO (Password Value Object)
+
+The `ContrasenaVO` class encapsulates password validation rules and ensures only valid passwords exist in the system.
+
+### Implementation
+
+```java src/main/java/com/example/demo/usuario/domain/vo/ContrasenaVO.java
+package com.example.demo.usuario.domain.vo;
+
+import com.example.demo.usuario.domain.exceptions.InvalidPasswordException;
+import lombok.Getter;
+
+@Getter
+public class ContrasenaVO {
+
+    private final String value;
+
+    public ContrasenaVO(String value) {
+        if (value == null || value.isEmpty()) {
+            throw new InvalidPasswordException("La contraseña no puede estar vacía");
+        }
+        if (value.length() < 8) {
+            throw new InvalidPasswordException("La contraseña debe tener al menos 8 caracteres");
+        }
+        if (value.length() > 64) {
+            throw new InvalidPasswordException("La contraseña no puede superar los 64 caracteres");
+        }
+        if (!value.matches(".*[A-Za-z].*") || !value.matches(".*\\d.*")) {
+            throw new InvalidPasswordException(
+                "La contraseña debe contener al menos una letra y un número"
+            );
+        }
+        this.value = value;
+    }
+
+    public ContrasenaVO actualizarContrasena(String nuevaContrasena) {
+        return new ContrasenaVO(nuevaContrasena);
+    }
+
+    @Override
+    public String toString() {
+        return "****";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof ContrasenaVO)) return false;
+        ContrasenaVO that = (ContrasenaVO) o;
+        return value.equals(that.value);
+    }
+
+    @Override
+    public int hashCode() {
+        return value.hashCode();
+    }
+}
+```
+
+### Key Features
+
+<Accordion title="Constructor Validation">
+All validation rules are enforced in the constructor. If validation fails, an exception is thrown immediately:
+
+```java
+// Valid password
+ContrasenaVO contrasena = new ContrasenaVO("password123"); // ✓
+
+// Invalid passwords throw exceptions
+new ContrasenaVO("");           // ✗ InvalidPasswordException: vacía
+new ContrasenaVO("abc");        // ✗ InvalidPasswordException: < 8 caracteres
+new ContrasenaVO("12345678");   // ✗ InvalidPasswordException: sin letras
+new ContrasenaVO("abcdefgh");   // ✗ InvalidPasswordException: sin números
+```
+
+This guarantees that **invalid passwords cannot exist** in your domain model.
+</Accordion>
+
+<Accordion title="Immutability">
+The `value` field is `final` and cannot be changed after construction. Updates create new instances:
+
+```java
+ContrasenaVO original = new ContrasenaVO("password123");
+ContrasenaVO nueva = original.actualizarContrasena("newpass456");
+
+// original and nueva are different objects
+assert original != nueva;
+```
+</Accordion>
+
+<Accordion title="Security Through toString()">
+The `toString()` method returns masked output to prevent accidental password exposure in logs:
+
+```java
+ContrasenaVO contrasena = new ContrasenaVO("password123");
+System.out.println(contrasena); // Output: ****
+```
+</Accordion>
+
+<Accordion title="Value Equality">
+Two `ContrasenaVO` objects with the same password are considered equal:
+
+```java
+ContrasenaVO pass1 = new ContrasenaVO("password123");
+ContrasenaVO pass2 = new ContrasenaVO("password123");
+
+assert pass1.equals(pass2); // true
+assert pass1 == pass2;      // false (different objects)
+```
+</Accordion>
+
+## PrecioVO (Price Value Object)
+
+The `PrecioVO` class ensures prices are always valid and non-negative.
+
+### Implementation
+
+```java src/main/java/com/example/demo/producto/domain/vo/PrecioVO.java
+package com.example.demo.producto.domain.vo;
+
+import lombok.Getter;
+
+@Getter
+public class PrecioVO {
+
+    private final Float value;
+
+    public PrecioVO(Float value) {
+        if (value == null) {
+            throw new IllegalArgumentException("El precio no puede ser nulo");
+        }
+        if (value < 0) {
+            throw new IllegalArgumentException("El precio no puede ser negativo");
+        }
+        this.value = value;
+    }
+
+    public PrecioVO actualizarPrecio(Float nuevoValor) {
+        return new PrecioVO(nuevoValor);
+    }
+
+    @Override
+    public String toString() {
+        return String.valueOf(value);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof PrecioVO)) return false;
+        PrecioVO that = (PrecioVO) o;
+        return value.equals(that.value);
+    }
+
+    @Override
+    public int hashCode() {
+        return value.hashCode();
+    }
+}
+```
+
+### Business Rules
+
+<Note>
+**Price Validation Rules**
+- Cannot be `null`
+- Cannot be negative
+- Must be a valid `Float` value
+</Note>
+
+### Usage Example
+
+```java
+// Valid prices
+PrecioVO precio1 = new PrecioVO(29.99f);  // ✓
+PrecioVO precio2 = new PrecioVO(0f);      // ✓ (free product)
+
+// Invalid prices throw exceptions
+new PrecioVO(null);   // ✗ IllegalArgumentException: nulo
+new PrecioVO(-10.5f); // ✗ IllegalArgumentException: negativo
+```
+
+## Using Value Objects in Domain Models
+
+Value Objects integrate seamlessly into domain models:
+
+```java src/main/java/com/example/demo/usuario/domain/models/UsuarioPOJO.java
+package com.example.demo.usuario.domain.models;
+
+import com.example.demo.usuario.domain.vo.ContrasenaVO;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@AllArgsConstructor
+@NoArgsConstructor
+@Getter
+@Setter
+public class UsuarioPOJO {
+    private Long id;
+    private String usuario;
+    private ContrasenaVO contrasena;  // Value Object
+}
+```
+
+```java src/main/java/com/example/demo/producto/domain/models/ProductoPOJO.java
+package com.example.demo.producto.domain.models;
+
+import com.example.demo.producto.domain.vo.PrecioVO;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class ProductoPOJO {
+    private Long id;
+    private String nombre;
+    private PrecioVO precio;  // Value Object
+}
+```
+
+<Info>
+By using Value Objects in domain models, you ensure that **invalid data can never exist** at the domain level.
+</Info>
+
+## Value Objects in Commands
+
+Value Objects enforce validation before commands reach handlers:
+
+```java src/main/java/com/example/demo/usuario/application/commands/RegistrarUsuarioCommand.java
+@AllArgsConstructor
+public class RegistrarUsuarioCommand {
+    private String usuario;
+    private ContrasenaVO contrasena;  // Already validated!
+}
+```
+
+In the controller, validation happens at VO creation:
+
+```java
+@PostMapping("/registro")
+public UsuarioPOJO registroUsuario(@RequestBody RegistrarUsuarioRequest request) {
+    // Validation happens here - if password is invalid, exception is thrown
+    RegistrarUsuarioCommand command = new RegistrarUsuarioCommand(
+        request.usuario(), 
+        new ContrasenaVO(request.contrasena())  // Validates here
+    );
+    return registrarUsuarioHandler.handle(command);
+}
+```
+
+## Benefits
+
+<Accordion title="Fail Fast">
+Invalid data is rejected at creation time, preventing invalid states from propagating through the system.
+</Accordion>
+
+<Accordion title="Type Safety">
+Prevents primitive obsession (e.g., using `String` for everything) and makes method signatures more expressive:
+
+```java
+// Bad: What does String represent?
+public void updatePassword(String password);
+
+// Good: Type clearly indicates a validated password
+public void updatePassword(ContrasenaVO password);
+```
+</Accordion>
+
+<Accordion title="Centralized Validation">
+Validation logic lives in one place. No need to validate passwords in controllers, services, and repositories.
+</Accordion>
+
+<Accordion title="Domain-Driven Design">
+Value Objects are a core DDD pattern that makes your domain model more expressive and closer to the business language.
+</Accordion>
+
+<Accordion title="Thread Safety">
+Immutability makes value objects naturally thread-safe without synchronization.
+</Accordion>
+
+## Creating New Value Objects
+
+When creating new value objects, follow this template:
+
+```java
+package com.example.demo.[module].domain.vo;
+
+import lombok.Getter;
+
+@Getter
+public class EmailVO {
+
+    private final String value;
+
+    public EmailVO(String value) {
+        // 1. Null/empty validation
+        if (value == null || value.isEmpty()) {
+            throw new IllegalArgumentException("Email cannot be empty");
+        }
+        
+        // 2. Business rule validation
+        if (!value.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$")) {
+            throw new IllegalArgumentException("Invalid email format");
+        }
+        
+        // 3. Assign to final field
+        this.value = value;
+    }
+
+    // 4. Update method returns new instance
+    public EmailVO updateEmail(String newValue) {
+        return new EmailVO(newValue);
+    }
+
+    // 5. Override equals(), hashCode(), and toString()
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof EmailVO)) return false;
+        EmailVO emailVO = (EmailVO) o;
+        return value.equals(emailVO.value);
+    }
+
+    @Override
+    public int hashCode() {
+        return value.hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return value;
+    }
+}
+```
+
+## Common Value Object Candidates
+
+Consider creating value objects for:
+
+- **Passwords**: `ContrasenaVO` (validation + security)
+- **Prices**: `PrecioVO` (non-negative, decimal precision)
+- **Emails**: `EmailVO` (format validation)
+- **Phone Numbers**: `TelefonoVO` (format, country code)
+- **Money**: `MonedaVO` (amount + currency)
+- **Addresses**: `DireccionVO` (street, city, postal code)
+- **Dates**: `FechaVO` (business date rules)
+- **Percentages**: `PorcentajeVO` (0-100 range)
+
+<Note>
+**Rule of Thumb**: If a primitive type has validation rules or business meaning, wrap it in a Value Object.
+</Note>
+
+## Related Concepts
+
+<CardGroup cols={2}>
+  <Card title="Clean Architecture" icon="layer-group" href="/concepts/clean-architecture">
+    VOs are part of the domain layer
+  </Card>
+  <Card title="CQRS Pattern" icon="arrows-split-up-and-left" href="/concepts/cqrs-pattern">
+    VOs validate data in Commands
+  </Card>
+</CardGroup>

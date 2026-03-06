@@ -1,0 +1,438 @@
+---
+title: Authentication
+description: Implement user authentication with password validation in the E-Commerce Backend API
+---
+
+This guide covers the authentication system including user registration, login, and password validation using the Value Object pattern.
+
+## Overview
+
+The authentication system provides:
+
+- User registration with password validation
+- Login functionality
+- Password requirements enforcement through `ContrasenaVO`
+- Domain-driven design with Value Objects
+
+## Authentication Endpoints
+
+### User Registration
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:8080/registro \
+  -H "Content-Type: application/json" \
+  -d '{
+    "usuario": "john_doe",
+    "contrasena": "Password123"
+  }'
+```
+
+```javascript JavaScript
+fetch('http://localhost:8080/registro', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    usuario: 'john_doe',
+    contrasena: 'Password123'
+  })
+})
+.then(response => response.json())
+.then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'http://localhost:8080/registro',
+    json={
+        'usuario': 'john_doe',
+        'contrasena': 'Password123'
+    }
+)
+user = response.json()
+```
+</CodeGroup>
+
+#### Endpoint Details
+
+- **Method**: `POST`
+- **Path**: `/registro`
+- **Request Body**: `RegistrarUsuarioRequest`
+
+```java
+public record RegistrarUsuarioRequest(
+    String usuario,
+    String contrasena
+) {}
+```
+
+#### Controller Implementation
+
+```java
+@PostMapping("/registro")
+public UsuarioPOJO registroUsuario(@RequestBody RegistrarUsuarioRequest request) {
+    RegistrarUsuarioCommand command = new RegistrarUsuarioCommand(
+        request.usuario(), 
+        new ContrasenaVO(request.contrasena())
+    );
+    return registrarUsuarioHandler.handle(command);
+}
+```
+
+<Note>
+  The password is wrapped in a `ContrasenaVO` (Value Object) which validates the password format before creating the user.
+</Note>
+
+### User Login
+
+<CodeGroup>
+```bash cURL
+curl -X GET http://localhost:8080/login/john_doe/Password123
+```
+
+```javascript JavaScript
+fetch('http://localhost:8080/login/john_doe/Password123')
+  .then(response => response.json())
+  .then(user => console.log(user));
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'http://localhost:8080/login/john_doe/Password123'
+)
+user = response.json()
+```
+</CodeGroup>
+
+#### Endpoint Details
+
+- **Method**: `GET`
+- **Path**: `/login/{usuario}/{contrasena}`
+- **Path Parameters**:
+  - `usuario`: Username
+  - `contrasena`: Password
+
+#### Controller Implementation
+
+```java
+@GetMapping("/login/{usuario}/{contrasena}")
+public UsuarioPOJO loginUsuario(
+    @PathVariable String usuario, 
+    @PathVariable String contrasena
+) {
+    LoginUsuarioQuery query = new LoginUsuarioQuery(usuario, contrasena);
+    return loginUsuarioHandler.handle(query);
+}
+```
+
+<Warning>
+  Sending passwords in URL path parameters is not secure for production. Consider using POST with request body or implementing token-based authentication (JWT) instead.
+</Warning>
+
+## Password Validation with ContrasenaVO
+
+### Value Object Pattern
+
+The `ContrasenaVO` (Contraseña Value Object) encapsulates password validation logic:
+
+```java
+public class ContrasenaVO {
+
+    private final String value;
+
+    public ContrasenaVO(String value) {
+        if (value == null || value.isEmpty()) {
+            throw new InvalidPasswordException("La contraseña no puede estar vacía");
+        }
+        if (value.length() < 8) {
+            throw new InvalidPasswordException("La contraseña debe tener al menos 8 caracteres");
+        }
+        if (value.length() > 64) {
+            throw new InvalidPasswordException("La contraseña no puede superar los 64 caracteres");
+        }
+        if (!value.matches(".*[A-Za-z].*") || !value.matches(".*\\d.*")) {
+            throw new InvalidPasswordException(
+                "La contraseña debe contener al menos una letra y un número"
+            );
+        }
+        this.value = value;
+    }
+}
+```
+
+### Password Requirements
+
+Passwords must meet the following criteria:
+
+<Steps>
+  <Step title="Non-Empty">
+    Password cannot be null or empty.
+    
+    ```java
+    if (value == null || value.isEmpty()) {
+        throw new InvalidPasswordException("La contraseña no puede estar vacía");
+    }
+    ```
+  </Step>
+
+  <Step title="Minimum Length">
+    Password must be at least 8 characters long.
+    
+    ```java
+    if (value.length() < 8) {
+        throw new InvalidPasswordException(
+            "La contraseña debe tener al menos 8 caracteres"
+        );
+    }
+    ```
+  </Step>
+
+  <Step title="Maximum Length">
+    Password cannot exceed 64 characters.
+    
+    ```java
+    if (value.length() > 64) {
+        throw new InvalidPasswordException(
+            "La contraseña no puede superar los 64 caracteres"
+        );
+    }
+    ```
+  </Step>
+
+  <Step title="Complexity Requirements">
+    Password must contain at least one letter and one number.
+    
+    ```java
+    if (!value.matches(".*[A-Za-z].*") || !value.matches(".*\\d.*")) {
+        throw new InvalidPasswordException(
+            "La contraseña debe contener al menos una letra y un número"
+        );
+    }
+    ```
+  </Step>
+</Steps>
+
+### Password Security Features
+
+#### Immutability
+
+`ContrasenaVO` is immutable with a `final` value field, preventing password modification:
+
+```java
+private final String value;
+```
+
+#### Secure toString()
+
+The `toString()` method masks the password:
+
+```java
+@Override
+public String toString() {
+    return "****";
+}
+```
+
+This prevents accidental password exposure in logs.
+
+#### Password Update
+
+To change a password, create a new `ContrasenaVO` instance:
+
+```java
+public ContrasenaVO actualizarContrasena(String nuevaContrasena) {
+    return new ContrasenaVO(nuevaContrasena);
+}
+```
+
+## Request and Response Models
+
+### UsuarioPOJO
+
+The domain model representing a user:
+
+```java
+public class UsuarioPOJO {
+    private Long id;
+    private String usuario;
+    private ContrasenaVO contrasena;
+}
+```
+
+### Response Example
+
+```json
+{
+  "id": 1,
+  "usuario": "john_doe",
+  "contrasena": "****"
+}
+```
+
+<Note>
+  The password field returns `"****"` in responses due to the overridden `toString()` method in `ContrasenaVO`.
+</Note>
+
+## Implementation Architecture
+
+### CQRS Pattern
+
+The authentication system follows CQRS (Command Query Responsibility Segregation):
+
+<Accordion title="Registration (Command)">
+  ```java
+  // Command
+  RegistrarUsuarioCommand command = new RegistrarUsuarioCommand(
+      request.usuario(), 
+      new ContrasenaVO(request.contrasena())
+  );
+  
+  // Handler
+  registrarUsuarioHandler.handle(command);
+  ```
+  
+  Commands modify state (create new user).
+</Accordion>
+
+<Accordion title="Login (Query)">
+  ```java
+  // Query
+  LoginUsuarioQuery query = new LoginUsuarioQuery(usuario, contrasena);
+  
+  // Handler
+  loginUsuarioHandler.handle(query);
+  ```
+  
+  Queries retrieve data (fetch user).
+</Accordion>
+
+## Validation Error Handling
+
+When password validation fails, `InvalidPasswordException` is thrown:
+
+```java
+public class InvalidPasswordException extends RuntimeException {
+    public InvalidPasswordException(String message) {
+        super(message);
+    }
+}
+```
+
+This exception is caught by the `GlobalExceptionHandler` and returned as a `400 Bad Request` response.
+
+See the [Error Handling](/guides/error-handling) guide for more details.
+
+## Testing Authentication
+
+### Valid Registration Examples
+
+<CodeGroup>
+```json Valid Password
+{
+  "usuario": "john_doe",
+  "contrasena": "SecurePass123"
+}
+```
+
+```json Minimum Valid
+{
+  "usuario": "jane",
+  "contrasena": "Pass1234"
+}
+```
+</CodeGroup>
+
+### Invalid Registration Examples
+
+<CodeGroup>
+```json Too Short
+{
+  "usuario": "bob",
+  "contrasena": "Pass1"
+}
+// Error: "La contraseña debe tener al menos 8 caracteres"
+```
+
+```json No Number
+{
+  "usuario": "alice",
+  "contrasena": "PasswordOnly"
+}
+// Error: "La contraseña debe contener al menos una letra y un número"
+```
+
+```json No Letter
+{
+  "usuario": "charlie",
+  "contrasena": "12345678"
+}
+// Error: "La contraseña debe contener al menos una letra y un número"
+```
+</CodeGroup>
+
+## Security Recommendations
+
+<Warning>
+  **Current Implementation Limitations:**
+  
+  1. Passwords are not hashed - stored as plain text
+  2. No session management or JWT tokens
+  3. Login endpoint uses GET with password in URL
+  4. No rate limiting or brute force protection
+</Warning>
+
+### Production Recommendations
+
+<Steps>
+  <Step title="Password Hashing">
+    Use BCrypt or Argon2 to hash passwords:
+    
+    ```java
+    BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+    String hashedPassword = encoder.encode(contrasena.getValue());
+    ```
+  </Step>
+
+  <Step title="Token-Based Authentication">
+    Implement JWT tokens instead of passing credentials with each request:
+    
+    ```xml
+    <dependency>
+        <groupId>io.jsonwebtoken</groupId>
+        <artifactId>jjwt</artifactId>
+    </dependency>
+    ```
+  </Step>
+
+  <Step title="HTTPS Only">
+    Always use HTTPS in production to encrypt credentials in transit.
+  </Step>
+
+  <Step title="Security Headers">
+    Add Spring Security for comprehensive protection:
+    
+    ```xml
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+    ```
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Learn about exception handling for authentication errors
+  </Card>
+  <Card title="User Endpoints" icon="code" href="/api/user-endpoints">
+    View complete user API documentation
+  </Card>
+</CardGroup>

@@ -1,0 +1,216 @@
+---
+title: Database Setup
+description: Configure MySQL database and JPA for the E-Commerce Backend API
+---
+
+This guide walks you through setting up the MySQL database and configuring Spring Data JPA for the E-Commerce Backend API.
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- MySQL 8.0 or higher installed
+- Java 17 or higher
+- Maven for dependency management
+
+## Database Configuration
+
+<Steps>
+  <Step title="Create the Database">
+    First, create the `ecommerce` database in MySQL:
+
+    ```sql
+    CREATE DATABASE ecommerce;
+    ```
+
+    <Note>
+      The application uses UTC timezone for all database operations to ensure consistency across different server locations.
+    </Note>
+  </Step>
+
+  <Step title="Configure application.properties">
+    The database connection is configured in `src/main/resources/application.properties`:
+
+    ```properties
+    spring.application.name=demo
+    spring.datasource.url=jdbc:mysql://localhost:3306/ecommerce?serverTimezone=UTC
+    spring.datasource.username=root
+    spring.datasource.password=sasa
+    spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+    spring.jpa.show-sql=true
+    spring.jpa.hibernate.ddl-auto=update
+    spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQL8Dialect
+    logging.level.org.hibernate.SQL=debug
+    ```
+
+    <Warning>
+      Update the `spring.datasource.username` and `spring.datasource.password` with your MySQL credentials before running the application.
+    </Warning>
+  </Step>
+
+  <Step title="Add Required Dependencies">
+    The application uses the following dependencies in `pom.xml`:
+
+    ```xml
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>com.mysql</groupId>
+        <artifactId>mysql-connector-j</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+    ```
+
+    These dependencies provide:
+    - **spring-boot-starter-data-jpa**: JPA support with Hibernate
+    - **mysql-connector-j**: MySQL JDBC driver
+  </Step>
+</Steps>
+
+## JPA Configuration
+
+### Hibernate DDL Auto
+
+The application uses `spring.jpa.hibernate.ddl-auto=update` which automatically:
+
+- Creates tables if they don't exist
+- Updates existing table schemas when entities change
+- Preserves existing data during schema updates
+
+<Warning>
+  In production environments, consider using `validate` instead of `update` to prevent automatic schema changes. Use database migration tools like Flyway or Liquibase for production deployments.
+</Warning>
+
+### SQL Logging
+
+The configuration enables SQL query logging for development:
+
+```properties
+spring.jpa.show-sql=true
+logging.level.org.hibernate.SQL=debug
+```
+
+This displays all SQL queries in the console, making it easier to debug database operations.
+
+<Note>
+  Disable SQL logging in production by setting `spring.jpa.show-sql=false` and removing the logging configuration to improve performance.
+</Note>
+
+## Entity Configuration
+
+### Usuario Entity
+
+The `UsuarioEntity` class maps to the `Usuario` table:
+
+```java
+@Entity
+@Table(name = "Usuario")
+public class UsuarioEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long idUsuario;
+ 
+    @Column(name = "usuario")
+    private String usuario;
+
+    @Column(name = "contrasena")
+    private String contrasena;
+}
+```
+
+#### Table Schema
+
+This entity creates the following table structure:
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| idUsuario | BIGINT | PRIMARY KEY, AUTO_INCREMENT |
+| usuario | VARCHAR(255) | - |
+| contrasena | VARCHAR(255) | - |
+
+<Note>
+  The `idUsuario` field uses `GenerationType.IDENTITY` which leverages MySQL's AUTO_INCREMENT feature for automatic ID generation.
+</Note>
+
+## Repository Layer
+
+### JPA Repository Interface
+
+The application uses Spring Data JPA repositories:
+
+```java
+@Repository
+public interface UsuarioJPARepository extends JpaRepository<UsuarioEntity, Long> {
+    UsuarioEntity findByUsuarioAndContrasena(String usuario, String contrasena);
+}
+```
+
+Spring Data JPA automatically implements:
+
+- Basic CRUD operations (save, findById, findAll, delete)
+- Custom query methods based on method names
+- Transaction management
+
+### Custom Query Method
+
+The `findByUsuarioAndContrasena` method generates the following SQL:
+
+```sql
+SELECT * FROM Usuario WHERE usuario = ? AND contrasena = ?
+```
+
+## Environment-Specific Configuration
+
+<Accordion title="Development Environment">
+  ```properties
+  spring.datasource.url=jdbc:mysql://localhost:3306/ecommerce?serverTimezone=UTC
+  spring.jpa.show-sql=true
+  spring.jpa.hibernate.ddl-auto=update
+  logging.level.org.hibernate.SQL=debug
+  ```
+</Accordion>
+
+<Accordion title="Production Environment">
+  ```properties
+  spring.datasource.url=jdbc:mysql://${DB_HOST}:${DB_PORT}/ecommerce?serverTimezone=UTC
+  spring.datasource.username=${DB_USERNAME}
+  spring.datasource.password=${DB_PASSWORD}
+  spring.jpa.show-sql=false
+  spring.jpa.hibernate.ddl-auto=validate
+  ```
+
+  Use environment variables to avoid hardcoding credentials.
+</Accordion>
+
+## Troubleshooting
+
+### Connection Issues
+
+If you encounter connection errors:
+
+1. Verify MySQL is running: `systemctl status mysql`
+2. Check credentials are correct
+3. Ensure the `ecommerce` database exists
+4. Verify MySQL is listening on port 3306
+
+### Schema Mismatch
+
+If you see "Table doesn't exist" errors:
+
+1. Verify `spring.jpa.hibernate.ddl-auto=update` is set
+2. Check entity class has `@Entity` and `@Table` annotations
+3. Review application logs for schema creation SQL statements
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="lock" href="/guides/authentication">
+    Learn how to implement user authentication
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Understand the error handling system
+  </Card>
+</CardGroup>

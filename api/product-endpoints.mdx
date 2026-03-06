@@ -1,0 +1,303 @@
+---
+title: 'Product Endpoints'
+description: 'Product catalog and search endpoints for the E-Commerce Backend API'
+---
+
+## Overview
+
+The Product API provides endpoints for querying and retrieving product information from the e-commerce catalog. These endpoints support both individual product lookups and bulk retrieval operations.
+
+<Note>
+  The product endpoints are designed for read operations. Product creation and updates would typically be handled through a separate administrative API.
+</Note>
+
+---
+
+## Get Product by Name
+
+<Expandable title="GET /productos/nombre/{nombre}">
+  Retrieves detailed information for a specific product by its name.
+
+  ### Path Parameters
+
+  <ParamField path="nombre" type="string" required>
+    The exact name of the product to retrieve. Product names are case-sensitive.
+  </ParamField>
+
+  ### Response
+
+  Returns a single product object with complete details.
+
+  <ResponseField name="id" type="long">
+    Unique identifier for the product
+  </ResponseField>
+
+  <ResponseField name="nombre" type="string">
+    The product name
+  </ResponseField>
+
+  <ResponseField name="precio" type="object">
+    Price value object with validation
+    <Expandable title="PrecioVO properties">
+      <ResponseField name="value" type="float">
+        The product price as a floating-point number. Must be non-negative.
+      </ResponseField>
+    </Expandable>
+  </ResponseField>
+
+  ### Example Request
+
+  <CodeGroup>
+  ```bash cURL
+  curl -X GET http://localhost:8080/productos/nombre/Laptop%20Dell%20XPS%2015
+  ```
+
+  ```bash cURL (Simple)
+  curl -X GET "http://localhost:8080/productos/nombre/Laptop Dell XPS 15"
+  ```
+  </CodeGroup>
+
+  ### Example Response
+
+  ```json 200 OK
+  {
+    "id": 101,
+    "nombre": "Laptop Dell XPS 15",
+    "precio": {
+      "value": 1299.99
+    }
+  }
+  ```
+
+  ### Error Responses
+
+  ```json 404 Not Found
+  {
+    "error": "ProductNotFoundException",
+    "message": "Producto no encontrado"
+  }
+  ```
+
+  ```json 400 Bad Request - Empty Name
+  {
+    "error": "BadRequestException",
+    "message": "El nombre del producto no puede estar vacío"
+  }
+  ```
+
+</Expandable>
+
+---
+
+## Get All Products
+
+<Expandable title="GET /productos">
+  Retrieves the complete list of all products in the catalog.
+
+  ### Query Parameters
+
+  <Note>
+    This endpoint currently returns all products without pagination. For large catalogs, consider implementing pagination in future versions.
+  </Note>
+
+  ### Response
+
+  Returns an array of product objects.
+
+  <ResponseField name="products" type="array">
+    Array of product objects
+    <Expandable title="Product object properties">
+      <ResponseField name="id" type="long">
+        Unique identifier for the product
+      </ResponseField>
+
+      <ResponseField name="nombre" type="string">
+        The product name
+      </ResponseField>
+
+      <ResponseField name="precio" type="object">
+        Price value object
+        <Expandable title="PrecioVO properties">
+          <ResponseField name="value" type="float">
+            The product price. Always non-negative.
+          </ResponseField>
+        </Expandable>
+      </ResponseField>
+    </Expandable>
+  </ResponseField>
+
+  ### Example Request
+
+  <CodeGroup>
+  ```bash cURL
+  curl -X GET http://localhost:8080/productos
+  ```
+
+  ```bash cURL (with headers)
+  curl -X GET http://localhost:8080/productos \
+    -H "Accept: application/json"
+  ```
+  </CodeGroup>
+
+  ### Example Response
+
+  ```json 200 OK
+  [
+    {
+      "id": 101,
+      "nombre": "Laptop Dell XPS 15",
+      "precio": {
+        "value": 1299.99
+      }
+    },
+    {
+      "id": 102,
+      "nombre": "Mouse Logitech MX Master 3",
+      "precio": {
+        "value": 99.99
+      }
+    },
+    {
+      "id": 103,
+      "nombre": "Teclado Mecánico Keychron K2",
+      "precio": {
+        "value": 89.99
+      }
+    },
+    {
+      "id": 104,
+      "nombre": "Monitor LG UltraWide 34\"",
+      "precio": {
+        "value": 549.99
+      }
+    },
+    {
+      "id": 105,
+      "nombre": "Auriculares Sony WH-1000XM5",
+      "precio": {
+        "value": 399.99
+      }
+    }
+  ]
+  ```
+
+  ### Error Responses
+
+  ```json 500 Internal Server Error
+  {
+    "error": "InternalServerError",
+    "message": "Error al recuperar productos"
+  }
+  ```
+
+</Expandable>
+
+---
+
+## Data Models
+
+### ProductoPOJO
+
+The product domain model used across all product endpoints.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | Long | Unique identifier |
+| `nombre` | String | Product name |
+| `precio` | PrecioVO | Price value object |
+
+### PrecioVO
+
+Value object for price handling with built-in validation.
+
+**Validation Rules:**
+- Cannot be null
+- Must be non-negative (>= 0)
+- Stored as Float type for decimal precision
+
+**Methods:**
+- `actualizarPrecio(Float nuevoValor)`: Creates a new PrecioVO with updated value
+- `toString()`: Returns string representation of the price
+- `equals(Object o)`: Value-based equality comparison
+- `hashCode()`: Hash code based on price value
+
+**Example:**
+```json
+{
+  "value": 299.99
+}
+```
+
+---
+
+## Implementation Details
+
+### Architecture
+
+The Product API follows Clean Architecture and Domain-Driven Design principles:
+
+- **Application Layer**: Use Cases
+  - `ConsultarProductoDetalladoUC` (src/main/java/com/example/demo/producto/application/usecases/ConsultarProductoDetalladoUC.java:1) - Get product by name
+  - `RecuperarTodosLosProductosUC` (src/main/java/com/example/demo/producto/application/usecases/RecuperarTodosLosProductosUC.java:1) - Get all products
+- **Domain Layer**: 
+  - `ProductoPOJO` (src/main/java/com/example/demo/producto/domain/models/ProductoPOJO.java:1) - Product domain model
+  - `PrecioVO` (src/main/java/com/example/demo/producto/domain/vo/PrecioVO.java:1) - Price value object
+  - `ProductoRepository` - Repository interface
+- **Infrastructure Layer**: 
+  - `ProductoAdapterRepository` - Repository implementation
+  - `ProductoEntity` - JPA entity
+  - REST Controller (to be implemented)
+
+### Use Case Processing Flow
+
+1. **Get Product by Name** (`ConsultarProductoDetalladoUC`):
+   ```java
+   public ProductoPOJO execute(String nombre)
+   ```
+   - Accepts product name as parameter
+   - Calls `productoRepository.getProductByNombre(nombre)`
+   - Returns single `ProductoPOJO` or throws exception if not found
+
+2. **Get All Products** (`RecuperarTodosLosProductosUC`):
+   ```java
+   public List<ProductoPOJO> execute()
+   ```
+   - No parameters required
+   - Calls `productoRepository.findAll()`
+   - Returns `List<ProductoPOJO>` with all products
+
+### Price Validation
+
+The `PrecioVO` value object enforces business rules:
+
+```java
+public PrecioVO(Float value) {
+    if (value == null) {
+        throw new IllegalArgumentException("El precio no puede ser nulo");
+    }
+    if (value < 0) {
+        throw new IllegalArgumentException("El precio no puede ser negativo");
+    }
+    this.value = value;
+}
+```
+
+This ensures that:
+- All products have valid prices
+- Prices cannot be negative
+- Null prices are rejected at creation time
+
+---
+
+## Future Enhancements
+
+<Note>
+  The following features are recommended for production deployments:
+</Note>
+
+- **Pagination**: Add pagination support to `GET /productos` for large catalogs
+- **Filtering**: Add query parameters for filtering by price range, category, etc.
+- **Search**: Implement full-text search across product names and descriptions
+- **Sorting**: Add sorting options (by price, name, date added)
+- **Product Details**: Extend ProductoPOJO to include descriptions, images, inventory status
+- **REST Controller**: Implement `ProductoRestController` to expose these use cases as REST endpoints

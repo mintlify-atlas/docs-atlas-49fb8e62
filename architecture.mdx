@@ -1,0 +1,552 @@
+---
+title: 'Architecture Overview'
+description: 'Understanding the Clean Architecture and CQRS patterns in the E-Commerce Backend API'
+---
+
+## Introduction
+
+This E-Commerce Backend API is built following **Clean Architecture** (also known as Hexagonal Architecture) principles combined with the **CQRS** (Command Query Responsibility Segregation) pattern. This architectural approach ensures:
+
+- **Separation of concerns** - Business logic is independent of frameworks
+- **Testability** - Core logic can be tested without external dependencies
+- **Maintainability** - Clear boundaries make the codebase easier to understand and modify
+- **Flexibility** - Easy to swap implementations (e.g., change database or framework)
+
+## Architectural Layers
+
+The application is organized into three main layers, each with distinct responsibilities:
+
+<CardGroup cols={3}>
+  <Card title="Domain Layer" icon="gem">
+    Pure business logic and rules
+  </Card>
+  <Card title="Application Layer" icon="gears">
+    Use cases and orchestration
+  </Card>
+  <Card title="Infrastructure Layer" icon="server">
+    External concerns (DB, API, frameworks)
+  </Card>
+</CardGroup>
+
+### Layer Dependency Flow
+
+```
+Infrastructure → Application → Domain
+```
+
+<Note>
+Dependencies point inward: Infrastructure depends on Application, Application depends on Domain, but Domain depends on nothing. This is the key principle of Clean Architecture.
+</Note>
+
+## Directory Structure
+
+The codebase is organized by **feature modules**, each containing all three architectural layers:
+
+```
+com.example.demo/
+├── DemoApplication.java                    # Main entry point
+├── core/                                   # Shared infrastructure
+│   └── infrastructures/
+│       └── exceptionhandler/
+│           └── GlobalExceptionHandler.java # Global error handling
+│
+├── usuario/                                # User module
+│   ├── domain/                            # Business logic
+│   │   ├── models/
+│   │   │   └── UsuarioPOJO.java          # Domain model
+│   │   ├── repositories/
+│   │   │   └── UsuarioRepository.java    # Repository interface
+│   │   ├── vo/
+│   │   │   └── ContrasenaVO.java         # Value Object
+│   │   └── exceptions/
+│   │       └── InvalidPasswordException.java
+│   │
+│   ├── application/                       # Use cases
+│   │   ├── commands/
+│   │   │   ├── RegistrarUsuarioCommand.java
+│   │   │   └── handlers/
+│   │   │       └── RegistrarUsuarioHandler.java
+│   │   └── querys/
+│   │       ├── LoginUsuarioQuery.java
+│   │       └── handlers/
+│   │           └── LoginUsuarioHandler.java
+│   │
+│   └── infrastructure/                    # External concerns
+│       ├── controllers/
+│       │   ├── UsuarioRestController.java
+│       │   └── RegistrarUsuarioRequest.java
+│       ├── entities/
+│       │   └── UsuarioEntity.java        # JPA entity
+│       ├── repositories/
+│       │   ├── UsuarioJPARepository.java
+│       │   └── UsuarioAdapterRepository.java
+│       └── config/
+│           └── CorsConfig.java
+│
+└── producto/                               # Product module
+    ├── domain/
+    ├── application/
+    └── infrastructure/
+```
+
+## Domain Layer
+
+The **Domain Layer** is the heart of the application, containing pure business logic with no external dependencies.
+
+### Domain Models (POJOs)
+
+Domain models represent business entities and contain business rules:
+
+```java
+@AllArgsConstructor
+@NoArgsConstructor
+@Getter
+@Setter
+public class UsuarioPOJO {
+    private Long id;
+    private String usuario;
+    private ContrasenaVO contrasena;	
+}
+```
+
+<Note>
+Models use the POJO (Plain Old Java Object) suffix to distinguish them from JPA entities. They contain only business logic, no persistence annotations.
+</Note>
+
+### Value Objects (VOs)
+
+Value Objects encapsulate domain concepts and enforce business rules:
+
+```java
+@Getter
+public class ContrasenaVO {
+    private final String value;
+
+    public ContrasenaVO(String value) {
+        if (value == null || value.isEmpty()) {
+            throw new InvalidPasswordException("La contraseña no puede estar vacía");
+        }
+        if (value.length() < 8) {
+            throw new InvalidPasswordException("La contraseña debe tener al menos 8 caracteres");
+        }
+        if (value.length() > 64) {
+            throw new InvalidPasswordException("La contraseña no puede superar los 64 caracteres");
+        }
+        if (!value.matches(".*[A-Za-z].*") || !value.matches(".*\\d.*")) {
+            throw new InvalidPasswordException("La contraseña debe contener al menos una letra y un número");
+        }
+        this.value = value;
+    }
+
+    @Override
+    public String toString() {
+        return "****";  // Never expose password in logs
+    }
+}
+```
+
+**Key characteristics of Value Objects:**
+- Immutable (final fields, no setters)
+- Self-validating (validation in constructor)
+- Represent domain concepts (not just primitive types)
+- Define equality based on value, not identity
+
+### Repository Interfaces
+
+Domain defines repository interfaces, but doesn't implement them:
+
+```java
+public interface UsuarioRepository {
+    UsuarioPOJO findUsuarioByUsuarioYContrasena(String usuario, String contrasena);
+    UsuarioPOJO saveUsuario(String usuario, String contrasena);
+}
+```
+
+<Warning>
+The Domain Layer must NEVER import classes from Application or Infrastructure layers. Dependencies flow inward only.
+</Warning>
+
+## Application Layer
+
+The **Application Layer** orchestrates business workflows using **CQRS** pattern to separate read and write operations.
+
+### CQRS Pattern
+
+**CQRS** (Command Query Responsibility Segregation) separates operations into two categories:
+
+<CardGroup cols={2}>
+  <Card title="Commands" icon="pen">
+    **Mutate state** - Create, Update, Delete operations
+  </Card>
+  <Card title="Queries" icon="magnifying-glass">
+    **Read state** - Fetch data without side effects
+  </Card>
+</CardGroup>
+
+#### Commands
+
+Commands represent state-changing operations:
+
+```java
+@Setter
+@Getter
+@AllArgsConstructor
+public class RegistrarUsuarioCommand {
+    private String usuario;
+    private ContrasenaVO contrasena;
+}
+```
+
+#### Command Handlers
+
+Handlers execute commands by coordinating domain objects:
+
+```java
+@Service
+public class RegistrarUsuarioHandler {
+    private final UsuarioRepository usuarioRepository;
+
+    public RegistrarUsuarioHandler(UsuarioRepository usuarioRepository) {
+        this.usuarioRepository = usuarioRepository;
+    }
+
+    public UsuarioPOJO handle(RegistrarUsuarioCommand command) {
+        return usuarioRepository.saveUsuario(
+            command.getUsuario(), 
+            command.getContrasena().getValue()
+        );
+    }
+}
+```
+
+#### Queries
+
+Queries represent read operations:
+
+```java
+@Getter
+@Setter
+@AllArgsConstructor
+public class LoginUsuarioQuery {
+    private String usuario;
+    private String contrasena;
+}
+```
+
+#### Query Handlers
+
+Query handlers fetch data without modifying state:
+
+```java
+@Service
+public class LoginUsuarioHandler {
+    private final UsuarioRepository usuarioRepository;
+
+    public LoginUsuarioHandler(UsuarioRepository usuarioRepository) {
+        this.usuarioRepository = usuarioRepository;
+    }
+
+    public UsuarioPOJO handle(LoginUsuarioQuery query) {
+        return usuarioRepository.findUsuarioByUsuarioYContrasena(
+            query.getUsuario(), 
+            query.getContrasena()
+        );
+    }
+}
+```
+
+### Use Cases
+
+For simpler operations, the application layer may use traditional Use Case classes:
+
+```java
+@Service
+public class RecuperarTodosLosProductosUC {
+    private final ProductoRepository productoRepository;
+    
+    public RecuperarTodosLosProductosUC(ProductoRepository productoRepository) {
+        this.productoRepository = productoRepository;
+    }
+    
+    public List<ProductoPOJO> execute() {
+        return productoRepository.findAll();
+    }
+}
+```
+
+## Infrastructure Layer
+
+The **Infrastructure Layer** contains framework-specific code and external integrations.
+
+### REST Controllers
+
+Controllers handle HTTP requests and delegate to application layer:
+
+```java
+@RestController
+public class UsuarioRestController {
+    private final RegistrarUsuarioHandler registrarUsuarioHandler;
+    private final LoginUsuarioHandler loginUsuarioHandler;
+
+    public UsuarioRestController(
+        RegistrarUsuarioHandler registrarUsuarioHandler, 
+        LoginUsuarioHandler loginUsuarioHandler
+    ) {
+        this.registrarUsuarioHandler = registrarUsuarioHandler;
+        this.loginUsuarioHandler = loginUsuarioHandler;
+    }
+
+    @GetMapping("/login/{usuario}/{contrasena}")
+    public UsuarioPOJO loginUsuario(
+        @PathVariable String usuario, 
+        @PathVariable String contrasena
+    ) {
+        LoginUsuarioQuery query = new LoginUsuarioQuery(usuario, contrasena);
+        return loginUsuarioHandler.handle(query);
+    }
+
+    @PostMapping("/registro")
+    public UsuarioPOJO registroUsuario(@RequestBody RegistrarUsuarioRequest request) {
+        RegistrarUsuarioCommand command = new RegistrarUsuarioCommand(
+            request.usuario(), 
+            new ContrasenaVO(request.contrasena())
+        );
+        return registrarUsuarioHandler.handle(command);
+    }
+}
+```
+
+### Request/Response DTOs
+
+DTOs (Data Transfer Objects) handle external data formats:
+
+```java
+public record RegistrarUsuarioRequest(
+    String usuario,
+    String contrasena
+) {}
+```
+
+<Note>
+Java records are perfect for DTOs - immutable, concise, and automatically implement equals/hashCode.
+</Note>
+
+### JPA Entities
+
+Entities handle database persistence:
+
+```java
+@Entity
+@Table(name = "Usuario")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class UsuarioEntity {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long idUsuario;
+ 
+    @Column(name = "usuario")
+    private String usuario;
+
+    @Column(name = "contrasena")
+    private String contrasena;
+    
+    public UsuarioEntity(String usuario, String contrasena) {
+        this.usuario = usuario;
+        this.contrasena = contrasena;
+    }
+
+    // Convert to domain model
+    public UsuarioPOJO toDomain() {
+        return new UsuarioPOJO(
+            this.idUsuario, 
+            this.usuario, 
+            new ContrasenaVO(this.contrasena)
+        );
+    }
+    
+    // Convert from domain model
+    public static UsuarioEntity fromDomain(UsuarioPOJO usuario) {
+        return new UsuarioEntity(
+            usuario.getId(), 
+            usuario.getUsuario(), 
+            usuario.getContrasena().getValue()
+        );
+    }
+}
+```
+
+**Key points:**
+- Entities have JPA annotations (`@Entity`, `@Table`, `@Id`)
+- Conversion methods (`toDomain()`, `fromDomain()`) bridge entity and domain models
+- Keeps persistence concerns separate from business logic
+
+### Repository Adapters
+
+Adapters implement domain repository interfaces using JPA:
+
+```java
+@Repository
+public class UsuarioAdapterRepository implements UsuarioRepository {
+    private final UsuarioJPARepository usuarioJPARepository;
+
+    public UsuarioAdapterRepository(UsuarioJPARepository usuarioJPARepository) {
+        this.usuarioJPARepository = usuarioJPARepository;
+    }
+
+    @Override
+    public UsuarioPOJO findUsuarioByUsuarioYContrasena(String usuario, String contrasena) {
+        return usuarioJPARepository
+            .findByUsuarioAndContrasena(usuario, contrasena)
+            .toDomain();
+    }
+
+    @Override
+    public UsuarioPOJO saveUsuario(String usuario, String contrasena) {
+        UsuarioEntity usuarioEntity = new UsuarioEntity(usuario, contrasena);
+        return usuarioJPARepository.save(usuarioEntity).toDomain();
+    }
+}
+```
+
+This follows the **Adapter Pattern**, allowing the domain to remain independent of JPA.
+
+### Global Exception Handling
+
+Centralized error handling for consistent API responses:
+
+```java
+@ControllerAdvice
+public class GlobalExceptionHandler {
+    @ExceptionHandler(InvalidPasswordException.class)
+    public ResponseEntity<String> handleInvalidPasswordException(
+        InvalidPasswordException ex
+    ) {
+        return ResponseEntity
+            .status(HttpStatus.BAD_REQUEST)
+            .body(ex.getMessage());
+    }
+}
+```
+
+## Dependency Injection
+
+The application uses **Spring's dependency injection** throughout:
+
+```java
+// Constructor injection (recommended)
+public RegistrarUsuarioHandler(UsuarioRepository usuarioRepository) {
+    this.usuarioRepository = usuarioRepository;
+}
+```
+
+<Note>
+Spring automatically wires dependencies thanks to `@Service`, `@Repository`, and `@RestController` annotations. No `@Autowired` needed with constructor injection.
+</Note>
+
+## Benefits of This Architecture
+
+<CardGroup cols={2}>
+  <Card title="Independent of Frameworks" icon="shield">
+    Core logic doesn't depend on Spring, JPA, or any framework
+  </Card>
+  
+  <Card title="Testable" icon="flask">
+    Business logic can be tested without databases or web servers
+  </Card>
+  
+  <Card title="Independent of UI" icon="mobile">
+    Same API can serve web, mobile, or other clients
+  </Card>
+  
+  <Card title="Independent of Database" icon="database">
+    Can swap MySQL for PostgreSQL, MongoDB, etc. with minimal changes
+  </Card>
+  
+  <Card title="Clear Boundaries" icon="border-all">
+    Each layer has explicit responsibilities
+  </Card>
+  
+  <Card title="Scalable" icon="arrow-up-right-dots">
+    CQRS allows independent scaling of read and write operations
+  </Card>
+</CardGroup>
+
+## Request Flow Example
+
+Let's trace a user registration request through all layers:
+
+<Steps>
+  <Step title="HTTP Request Arrives">
+    Client sends POST to `/registro` with JSON body
+  </Step>
+
+  <Step title="Controller Layer (Infrastructure)">
+    `UsuarioRestController` receives request, creates `RegistrarUsuarioCommand`
+  </Step>
+
+  <Step title="Command Handler (Application)">
+    `RegistrarUsuarioHandler` receives command, orchestrates business logic
+  </Step>
+
+  <Step title="Value Object Validation (Domain)">
+    `ContrasenaVO` constructor validates password rules
+  </Step>
+
+  <Step title="Repository Interface (Domain)">
+    Handler calls `usuarioRepository.saveUsuario()`
+  </Step>
+
+  <Step title="Repository Adapter (Infrastructure)">
+    `UsuarioAdapterRepository` implements the interface using JPA
+  </Step>
+
+  <Step title="JPA Entity (Infrastructure)">
+    `UsuarioEntity` persists to MySQL database
+  </Step>
+
+  <Step title="Response Mapping">
+    Entity converted to domain model (`toDomain()`), returned as JSON
+  </Step>
+</Steps>
+
+## Best Practices
+
+### DO's
+
+- Keep domain models pure (no framework annotations)
+- Use Value Objects for domain concepts
+- Validate in Value Object constructors
+- Use constructor injection
+- Separate commands from queries
+- Convert entities to domain models at boundaries
+
+### DON'Ts
+
+- Don't put business logic in controllers
+- Don't let domain depend on infrastructure
+- Don't mix JPA entities with domain models
+- Don't skip validation in Value Objects
+- Don't expose entities directly via API
+
+## Further Reading
+
+<CardGroup cols={2}>
+  <Card title="CQRS Pattern" icon="arrows-split-up-and-left" href="/concepts/cqrs-pattern">
+    Learn about command and query separation
+  </Card>
+  
+  <Card title="User API Endpoints" icon="code" href="/api/user-endpoints">
+    Explore user registration and login endpoints
+  </Card>
+  
+  <Card title="Value Objects" icon="shield-check" href="/concepts/value-objects">
+    Understand domain validation with value objects
+  </Card>
+  
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Global exception handling patterns
+  </Card>
+</CardGroup>

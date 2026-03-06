@@ -1,0 +1,96 @@
+---
+title: "Introduction"
+description: "A Spring Boot REST API for e-commerce with clean architecture, CQRS pattern, and comprehensive user and product management."
+---
+
+## Welcome to E-Commerce Backend API
+
+A production-ready Spring Boot REST API designed with clean architecture principles, implementing CQRS patterns and Domain-Driven Design for building scalable e-commerce applications.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get your development environment set up and running in minutes
+  </Card>
+  <Card title="Architecture Overview" icon="diagram-project" href="/architecture">
+    Understand the clean architecture and DDD patterns used in this project
+  </Card>
+  <Card title="API Endpoints" icon="code" href="/api/user-endpoints">
+    Explore the complete API reference for users and products
+  </Card>
+  <Card title="Database Setup" icon="database" href="/guides/database-setup">
+    Configure MySQL and set up your database schema
+  </Card>
+</CardGroup>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Clean Architecture" icon="layer-group">
+    Organized into domain, application, and infrastructure layers for maintainability and testability
+  </Card>
+  <Card title="CQRS Pattern" icon="arrows-split-up-and-left">
+    Separates commands and queries for better scalability and performance
+  </Card>
+  <Card title="User Management" icon="users">
+    Complete user registration and authentication system with secure password handling
+  </Card>
+  <Card title="Product Catalog" icon="box">
+    Manage products with detailed information and pricing using value objects
+  </Card>
+  <Card title="Value Objects" icon="shield-check">
+    Domain validation through immutable value objects ensuring data integrity
+  </Card>
+  <Card title="Exception Handling" icon="triangle-exclamation">
+    Global exception handler providing consistent error responses across the API
+  </Card>
+</CardGroup>
+
+## Technology Stack
+
+This API is built with modern Java technologies:
+
+- **Spring Boot 3.5.7** - Enterprise-grade application framework
+- **Spring Data JPA** - Simplified data access with Hibernate
+- **MySQL 8** - Robust relational database
+- **Lombok** - Reduced boilerplate code
+- **Maven** - Dependency management and build automation
+
+## Architecture Highlights
+
+The project follows **Hexagonal Architecture** (Ports and Adapters) with clear separation of concerns:
+
+```
+src/main/java/com/example/demo/
+├── core/               # Shared infrastructure
+├── producto/           # Product domain
+│   ├── application/   # Use cases and command/query handlers
+│   ├── domain/        # Domain models, VOs, and repositories
+│   └── infrastructure/# JPA entities, adapters, and persistence
+└── usuario/           # User domain
+    ├── application/   # Use cases and command/query handlers
+    ├── domain/        # Domain models, VOs, and repositories
+    └── infrastructure/# Controllers, entities, and persistence
+```
+
+<Note>
+Each bounded context (User, Product) is organized into three distinct layers, promoting loose coupling and high cohesion.
+</Note>
+
+## Getting Started
+
+<Steps>
+  <Step title="Prerequisites">
+    Ensure you have Java 17+, Maven 3.6+, and MySQL 8+ installed on your system.
+  </Step>
+  <Step title="Clone the Repository">
+    Clone the project and navigate to the root directory.
+  </Step>
+  <Step title="Configure Database">
+    Set up MySQL database connection in `application.properties`.
+  </Step>
+  <Step title="Run the Application">
+    Execute `mvn spring-boot:run` to start the API server.
+  </Step>
+</Steps>
+
+Ready to dive in? Head over to the [Quick Start Guide](/quickstart) to set up your development environment.
